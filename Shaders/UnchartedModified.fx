@@ -16,7 +16,7 @@ uniform float U2_A <
 	ui_type = "slider";
 	ui_min = 0.00; ui_max = 1.00;
 	ui_label = "Shoulder strength";
-> = 0.22;
+> = 0.15;
 
 uniform float U2_B <
 	ui_type = "slider";
@@ -46,7 +46,7 @@ uniform float U2_F <
 	ui_type = "slider";
 	ui_min = 0.00; ui_max = 1.00;
 	ui_label = "Toe denominator";
-> = 0.22;
+> = 0.220;
 
 uniform float U2_Exp <
 	ui_type = "slider";
