@@ -1,89 +1,64 @@
 /*
 									UnchartedModified: 
-		This is a modified version of the Uncharted 2 Tonemap found on filmicworlds, by Zackin5, and edited with chillant and has tweakable values.
+		This is a modified version of the Uncharted 2 Tonemap found on filmicworlds and edited with chillant and has tweakable values.
 		
 		Full credits to John Hable for the code to use as a base, and Ian Taylor for the code used to make it run better.
-		Edited by Brimson, DieuDeGlace, and Luluco250.
+		Edited by Brimson and DieuDeGlace.
 */
 
 #include "ReShade.fxh"
 
-uniform bool U2_Lum <
+uniform bool Luminance <
 	ui_label = "Use luminance";
 	ui_tooltip = "Calculate tone based off each pixel's luminance value vs the RGB value.";
 > = true;
-uniform float U2_A <
-	ui_type = "slider";
-	ui_min = 0.00; ui_max = 1.00;
-	ui_label = "Shoulder strength";
-> = 0.15;
 
-uniform float U2_B <
+uniform float Function1 <
 	ui_type = "slider";
-	ui_min = 0.00; ui_max = 1.00;
-	ui_label = "Linear strength";
-> = 0.30;
+	ui_min = 0.0;
+	ui_max = 6.0;
+> = 1.00;
 
-uniform float U2_C <
+uniform float Function2 <
 	ui_type = "slider";
-	ui_min = 0.00; ui_max = 1.00;
-	ui_label = "Linear angle";
-> = 0.10;
-
-uniform float U2_D <
-	ui_type = "slider";
-	ui_min = 0.00; ui_max = 1.00;
-	ui_label = "Toe strength";
-> = 0.20;
-
-uniform float U2_E <
-	ui_type = "slider";
-	ui_min = 0.00; ui_max = 1.00;
-	ui_label = "Toe numerator";
-> = 0.01;
-
-uniform float U2_F <
-	ui_type = "slider";
-	ui_min = 0.00; ui_max = 1.00;
-	ui_label = "Toe denominator";
-> = 0.220;
-
-uniform float U2_Exp <
-	ui_type = "slider";
-	ui_min = 1.00; ui_max = 20.00;
-	ui_label = "Exposure";
-> = 1.0;
+	ui_min = 0.0;
+	ui_max = 4.0;
+> = 1.00;
 uniform float Saturation
 <
     ui_type = "slider";
     ui_min = 0.0;
     ui_max = 1.5;
 > = 1.0;
-uniform float Shadow
-<
-    ui_type = "slider";
-    ui_min = 0.0;
-    ui_max = 1.5;
-> = 1.0;
-uniform float U2_Gamma <
+uniform float Gamma <
 	ui_type = "slider";
-	ui_min = 1.00; ui_max = 3.00;
-	ui_label = "Gamma value";
+	ui_min = 1.0; ui_max = 3.0;
 	ui_tooltip = "Most monitors/images use a value of 2.2. Setting this to 1 disables the inital color space conversion from gamma to linear.";
 > = 2.2;
 uniform float3 FinalColoring <
 	ui_type = "drag";
-	ui_min = 0.00; ui_max = 50.00;
+	ui_min = -5.00; ui_max = 10.00;
 	ui_tooltip = "Most monitors/images use a value of 2.2. Setting this to 1 disables the inital color space conversion from gamma to linear.";
-> = 0.0;
+> = (1.0, 1.0, 1.0);
 
 uniform float3 WhitePoint <
 	ui_type = "drag";
 	ui_min = 0.00; ui_max = 20.00;
 	ui_tooltip = "Most monitors/images use a value of 2.2. Setting this to 1 disables the inital color space conversion from gamma to linear.";
-> = 11.20;
+> = (11.00, 11.00, 11.00);
 
+// Functions from Unity's Built-In Shaders, [http://chilliant.blogspot.com.au/2012/08/srgb-approximations-for-hlsl.html?m=1]
 
+float3 GammaToLinearSpace (float3 sRGB)
+{
+    return sRGB * (sRGB * (sRGB * 0.3 + 0.68) + 0.01);
+}
+
+float3 LinearToGammaSpace (float3 linRGB)
+{
+    linRGB = max(linRGB, 0.0);
+    return max(1.08 * pow(linRGB, 0.47)+(FinalColoring*(0.01)) - 0.015, 0.0);
+}
 //  Functions from [https://www.chilliant.com/rgb2hsv.html]
 float3 HUEtoRGB(in float H)
 {
@@ -151,59 +126,57 @@ float3 ApplySaturation(float3 color)
     return color;
 }
 
+// Function provided via [http://filmicworlds.com/blog/filmic-tonemapping-operators/]
 float3 Uncharted2Tonemap(float3 x)
+{	
+	float A = 0.15;
+	float B = 0.50;
+	float C = 0.10;
+	float D = 0.20;
+	float E = 0.02;
+	float F = 0.30;
+	float W = 11.2;
+	return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-(E/F);
+
+}
+float3 LuminanceTonemap(float3 texColor)
 {
-	return ((x*(U2_A*x+U2_C*U2_B)+U2_D*U2_E)/(x*(U2_A*x+U2_B)+U2_D*U2_F))-U2_E/U2_F;
+    float ExposureBias = 2.0;
+    float lum = 0.2126 * texColor.r + 0.7152 * texColor.g + 0.0722 * texColor.b + 1e-37;
+    float3 newLum = Uncharted2Tonemap(ExposureBias*lum);
+    float lumScale = newLum / lum;
+    return texColor*lumScale;
 }
 
-	// Function provided by Zackin5 [https://github.com/Zackin5/Filmic-Tonemapping-ReShade/]
-float3 Uncharted_Tonemap_Main(float4 pos : SV_Position, float2 texcoord : TexCoord ) : COLOR
+float3 ColorFilmicToneMappingPass(float4 position : SV_Position, float2 texcoord : TexCoord) : SV_Target
 {
-	float3 texColor = (tex2D(ReShade::BackBuffer, texcoord).rgb);
-	
-	// Do inital de-gamma of the game image to ensure we're operating in the correct colour range.
-	if( U2_Gamma > 0.00 )
-		texColor = pow(texColor,U2_Gamma);
-		
-	texColor *= U2_Exp;  // Exposure Adjustment
+    float3 texColor = GammaToLinearSpace(tex2D(ReShade::BackBuffer, texcoord).rgb);
+    texColor=ApplySaturation(texColor);
+    texColor = Gamma > 0.0 ? pow(abs(texColor),Gamma) : texColor;
 
-	float ExposureBias = 2.0f;
-	float3 curr;
+    texColor *= Function1;  // Exposure Adjustment
 
-	// Do tonemapping on RGB or Luminance
-	if(!U2_Lum)
-		curr = Uncharted2Tonemap(ExposureBias*texColor);
-	else
-	{
-		float lum = 0.2126f * texColor[0] + 0.7152 * texColor[1] + 0.0722 * texColor[2] + 1e-37;
-		float3 newLum = Uncharted2Tonemap(ExposureBias*lum);
-		float lumScale = newLum / lum;
-		curr = texColor*lumScale;
-	}
+    float ExposureBias = 2.0;
+    float3 curr;
+    // Do tonemapping on RGB or Luminance
+    curr = Luminance
+        ? LuminanceTonemap(texColor)
+        : Uncharted2Tonemap(ExposureBias*texColor);
 
-	float3 whiteScale = 1.0f/Uncharted2Tonemap(WhitePoint);
-	
-	//this function is provided by Lucas [https://github.com/luluco250]
-	texColor = ApplySaturation(texColor);
-	
-	
-	float3 color = curr*whiteScale;
+    float3 whiteScale = 1.0/Uncharted2Tonemap(WhitePoint);
+
+    float3 color = curr*whiteScale;
+
+    color = Gamma > 0.0 ? pow(abs(color), Function2 / Gamma) : color;
     
-	// Do the post-tonemapping gamma correction
-	if( U2_Gamma > 0.00 )
-		color = pow(color,Shadow/U2_Gamma)+(FinalColoring*(0.01));
-				
 
-	color = lerp(dot(color, 0.333), color, Saturation);
-	
-	return color;
+    return LinearToGammaSpace(color);
 }
-
-technique Uncharted2Tonemap
+technique Uncharted2Mod
 {
 	pass
 	{
 		VertexShader = PostProcessVS;
-		PixelShader = Uncharted_Tonemap_Main;
+		PixelShader = ColorFilmicToneMappingPass;
 	}
 }
