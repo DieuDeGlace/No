@@ -1,9 +1,9 @@
 /*
 									UnchartedModified: 
-		This is a modified version of the Uncharted 2 Tonemap found on filmicworlds and edited with chillant and has tweakable values.
+		This is a modified version of the Uncharted 2 Tonemap found on filmicworlds, by Zackin5, and edited with chillant and has tweakable values.
 		
 		Full credits to John Hable for the code to use as a base, and Ian Taylor for the code used to make it run better.
-		Edited by Brimson and DieuDeGlace.
+		Edited by Brimson, DieuDeGlace, and Luluco250.
 */
 
 #include "ReShade.fxh"
@@ -11,7 +11,7 @@
 uniform bool Luminance <
 	ui_label = "Use luminance";
 	ui_tooltip = "Calculate tone based off each pixel's luminance value vs the RGB value.";
-> = true;
+> = false;
 
 uniform float Function1 <
 	ui_type = "slider";
@@ -47,19 +47,8 @@ uniform float3 WhitePoint <
 	ui_tooltip = "Most monitors/images use a value of 2.2. Setting this to 1 disables the inital color space conversion from gamma to linear.";
 > = (11.00, 11.00, 11.00);
 
-// Functions from Unity's Built-In Shaders, [http://chilliant.blogspot.com.au/2012/08/srgb-approximations-for-hlsl.html?m=1]
-
-float3 GammaToLinearSpace (float3 sRGB)
-{
-    return sRGB * (sRGB * (sRGB * 0.3 + 0.68) + 0.01);
-}
-
-float3 LinearToGammaSpace (float3 linRGB)
-{
-    linRGB = max(linRGB, 0.0);
-    return max(1.08 * pow(linRGB, 0.47)+(FinalColoring*(0.01)) - 0.015, 0.0);
-}
 //  Functions from [https://www.chilliant.com/rgb2hsv.html]
+
 float3 HUEtoRGB(in float H)
 {
     float R = abs(H * 6 - 3) - 1;
@@ -79,53 +68,27 @@ float3 RGBtoHCV(in float3 RGB)
     return float3(H, C, Q.x);
 }
 
-float3 RGBtoHCY(in float3 RGB)
+  float3 RGBtoHSV(in float3 RGB)
   {
-    // The weights of RGB contributions to luminance.
-	// Should sum to unity.
-
-
-	float3 HCYwts = float3(0.299, 0.587, 0.114);
-	float Epsilon = 1e-10;
-    // Corrected by David Schaeffer
+    float Epsilon = 1e-10;
     float3 HCV = RGBtoHCV(RGB);
-    float Y = dot(RGB, HCYwts);
-    float Z = dot(HUEtoRGB(HCV.x), HCYwts);
-    if (Y < Z)
-    {
-      HCV.y *= Z / (Epsilon + Y);
-    }
-    else
-    {
-      HCV.y *= (1 - Z) / (Epsilon + 1 - Y);
-    }
-    return float3(HCV.x, HCV.y, Y);
+    float S = HCV.y / (HCV.z + Epsilon);
+    return float3(HCV.x, S, HCV.z);
   }
 
-float3 HCYtoRGB(in float3 HCY)
+  float3 HSVtoRGB(in float3 HSV)
   {
-	float3 HCYwts = float3(0.299, 0.587, 0.114);
-    float3 RGB = HUEtoRGB(HCY.x);
-    float Z = dot(RGB, HCYwts);
-    if (HCY.z < Z)
-    {
-        HCY.y *= HCY.z / Z;
-    }
-    else if (Z < 1)
-    {
-        HCY.y *= (1 - HCY.z) / (1 - Z);
-    }
-    return (RGB - Z) * HCY.y + HCY.z;
+    float3 RGB = HUEtoRGB(HSV.x);
+    return ((RGB - 1) * HSV.y + 1) * HSV.z;
   }
 // Function provided by Lucas [https://github.com/luluco250]
 float3 ApplySaturation(float3 color)
 {
-    color = RGBtoHCY(color);
+    color = RGBtoHSV(color);
     color.y *= Saturation;
-    color = HCYtoRGB(color);
+    color = HSVtoRGB(color);
     return color;
 }
-
 // Function provided via [http://filmicworlds.com/blog/filmic-tonemapping-operators/]
 float3 Uncharted2Tonemap(float3 x)
 {	
@@ -135,7 +98,6 @@ float3 Uncharted2Tonemap(float3 x)
 	float D = 0.20;
 	float E = 0.02;
 	float F = 0.30;
-	float W = 11.2;
 	return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-(E/F);
 
 }
@@ -147,36 +109,41 @@ float3 LuminanceTonemap(float3 texColor)
     float lumScale = newLum / lum;
     return texColor*lumScale;
 }
-
-float3 ColorFilmicToneMappingPass(float4 position : SV_Position, float2 texcoord : TexCoord) : SV_Target
+	// Function provided by Zackin5 [https://github.com/Zackin5/Filmic-Tonemapping-ReShade/]
+float3 Uncharted_Tonemap_Main(float4 pos : SV_Position, float2 texcoord : TexCoord ) : COLOR
 {
-    float3 texColor = GammaToLinearSpace(tex2D(ReShade::BackBuffer, texcoord).rgb);
-    texColor=ApplySaturation(texColor);
+	float3 texColor = (tex2D(ReShade::BackBuffer, texcoord).rgb);
+	texColor = ApplySaturation(texColor);
+	// Do inital de-gamma of the game image to ensure we're operating in the correct colour range.
     texColor = Gamma > 0.0 ? pow(abs(texColor),Gamma) : texColor;
-
-    texColor *= Function1;  // Exposure Adjustment
-
+		
+	texColor *= Function1;  // Exposure Adjustment
+	
     float ExposureBias = 2.0;
     float3 curr;
     // Do tonemapping on RGB or Luminance
-    curr = Luminance
-        ? LuminanceTonemap(texColor)
-        : Uncharted2Tonemap(ExposureBias*texColor);
+    curr = Luminance ? LuminanceTonemap(texColor) : Uncharted2Tonemap(ExposureBias*texColor);
 
-    float3 whiteScale = 1.0/Uncharted2Tonemap(WhitePoint);
 
-    float3 color = curr*whiteScale;
+	float3 whiteScale = 1.0f/Uncharted2Tonemap(WhitePoint);
+	
+	//this function is provided by Lucas [https://github.com/luluco250]
+	texColor = ApplySaturation(texColor);
+	
+	
+	float3 color = curr*whiteScale;
 
+	// Do the post-tonemapping gamma correction
     color = Gamma > 0.0 ? pow(abs(color), Function2 / Gamma) : color;
-    
-
-    return LinearToGammaSpace(color);
+	
+	return (color)+(FinalColoring*(0.01));
 }
-technique Uncharted2Mod
+
+technique Uncharted2Tonemap
 {
 	pass
 	{
 		VertexShader = PostProcessVS;
-		PixelShader = ColorFilmicToneMappingPass;
+		PixelShader = Uncharted_Tonemap_Main;
 	}
 }
