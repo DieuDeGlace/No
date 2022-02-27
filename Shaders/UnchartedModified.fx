@@ -11,7 +11,7 @@
 uniform bool Luminance <
 	ui_label = "Use luminance";
 	ui_tooltip = "Calculate tone based off each pixel's luminance value vs the RGB value.";
-> = false;
+> = true;
 
 uniform float Function1 <
 	ui_type = "slider";
@@ -39,13 +39,26 @@ uniform float3 FinalColoring <
 	ui_type = "drag";
 	ui_min = -5.00; ui_max = 10.00;
 	ui_tooltip = "Most monitors/images use a value of 2.2. Setting this to 1 disables the inital color space conversion from gamma to linear.";
-> = (1.0, 1.0, 1.0);
+> = (0.0, 0.0, 0.0);
 
 uniform float3 WhitePoint <
 	ui_type = "drag";
 	ui_min = 0.00; ui_max = 20.00;
 	ui_tooltip = "Most monitors/images use a value of 2.2. Setting this to 1 disables the inital color space conversion from gamma to linear.";
 > = (11.00, 11.00, 11.00);
+
+// Functions from Unity's Built-In Shaders, [http://chilliant.blogspot.com.au/2012/08/srgb-approximations-for-hlsl.html?m=1]
+
+float3 GammaToLinearSpace (float3 sRGB)
+{
+    return sRGB * (sRGB * (sRGB * 0.3 + 0.68) + 0.01);
+}
+
+float3 LinearToGammaSpace (float3 linRGB)
+{
+    linRGB = max(linRGB, 0.0);
+    return max(1.08 * pow(linRGB, 0.47)+(FinalColoring*(0.01)) - 0.007, 0.0);
+}
 
 //  Functions from [https://www.chilliant.com/rgb2hsv.html]
 float3 HUEtoRGB(in float H)
@@ -109,7 +122,7 @@ float3 LuminanceTonemap(float3 texColor)
 	// Function provided by Zackin5 [https://github.com/Zackin5/Filmic-Tonemapping-ReShade/]
 float3 Uncharted_Tonemap_Main(float4 pos : SV_Position, float2 texcoord : TexCoord ) : COLOR
 {
-	float3 texColor = (tex2D(ReShade::BackBuffer, texcoord).rgb);
+	float3 texColor = GammaToLinearSpace(tex2D(ReShade::BackBuffer, texcoord).rgb);
 
 	// Do inital de-gamma of the game image to ensure we're operating in the correct colour range.
     texColor = Gamma > 0.0 ? pow(abs(texColor),Gamma) : texColor;	
@@ -129,7 +142,7 @@ float3 Uncharted_Tonemap_Main(float4 pos : SV_Position, float2 texcoord : TexCoo
 	// Do the post-tonemapping gamma correction
     color = Gamma > 0.0 ? pow(abs(color), Function2 / Gamma) : color;
 	color = ApplySaturation(color);
-	return (color)+(FinalColoring*(0.01));
+	return LinearToGammaSpace(color);
 }
 
 technique Uncharted2Tonemap
