@@ -51,13 +51,13 @@ uniform float3 WhitePoint <
 
 float3 GammaToLinearSpace (float3 sRGB)
 {
-    return sRGB * (sRGB * (sRGB * 0.3 + 0.68) + 0.01);
+    return sRGB * (sRGB * (sRGB * 0.3 + 0.7) + 0.01);
 }
 
 float3 LinearToGammaSpace (float3 linRGB)
 {
     linRGB = max(linRGB, 0.0);
-    return max(1.08 * pow(linRGB, 0.47)+(FinalColoring*(0.01)) - 0.007, 0.0);
+    return max(1.2 * pow(linRGB, 0.47)+(FinalColoring*(0.01)) - 0.01, 0.0);
 }
 
 //  Functions from [https://www.chilliant.com/rgb2hsv.html]
@@ -114,7 +114,7 @@ float3 Uncharted2Tonemap(float3 x)
 float3 LuminanceTonemap(float3 texColor)
 {
     float ExposureBias = 2.0;
-    float lum = 0.2126 * texColor.r + 0.7152 * texColor.g + 0.0722 * texColor.b + 1e-37;
+    float lum = 0.2126 * texColor.r + 0.7152 * texColor.g + 0.0722 * texColor.b + 1;
     float3 newLum = Uncharted2Tonemap(ExposureBias*lum);
     float lumScale = newLum / lum;
     return texColor*lumScale;
