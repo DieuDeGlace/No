@@ -103,7 +103,7 @@ float3 ApplySaturation(float3 color)
 // Function provided via [http://filmicworlds.com/blog/filmic-tonemapping-operators/]
 float3 Uncharted2Tonemap(float3 x)
 {	
-	float A = 0.15;
+	float A = 0.10;
 	float B = 0.50;
 	float C = 0.10;
 	float D = 0.20;
