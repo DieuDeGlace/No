@@ -8,11 +8,6 @@
 
 #include "ReShade.fxh"
 
-uniform bool Luminance <
-	ui_label = "Use luminance";
-	ui_tooltip = "Calculate tone based off each pixel's luminance value vs the RGB value.";
-> = true;
-
 uniform float Function1 <
 	ui_type = "slider";
 	ui_min = 0.0;
@@ -45,19 +40,19 @@ uniform float3 WhitePoint <
 	ui_type = "drag";
 	ui_min = 0.00; ui_max = 20.00;
 	ui_tooltip = "Most monitors/images use a value of 2.2. Setting this to 1 disables the inital color space conversion from gamma to linear.";
-> = (11.00, 11.00, 11.00);
+> = (11.20, 11.20, 11.20);
 
 // Functions from Unity's Built-In Shaders, [http://chilliant.blogspot.com.au/2012/08/srgb-approximations-for-hlsl.html?m=1]
 
 float3 GammaToLinearSpace (float3 sRGB)
 {
-    return sRGB * (sRGB * (sRGB * 0.3 + 0.7) + 0.01);
+    return sRGB * (sRGB * (sRGB * 0.3 + 0.7) + 0.0);
 }
 
 float3 LinearToGammaSpace (float3 linRGB)
 {
     linRGB = max(linRGB, 0.0);
-    return max(1.2 * pow(linRGB, 0.47)+(FinalColoring*(0.01)) - 0.01, 0.0);
+    return max(1.18 * pow(linRGB, 0.47)+(FinalColoring*(0.01)) - 0.004, 0.0);
 }
 
 //  Functions from [https://www.chilliant.com/rgb2hsv.html]
@@ -111,10 +106,11 @@ float3 Uncharted2Tonemap(float3 x)
 	float F = 0.30;
 	return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-(E/F);
 }
+
 float3 LuminanceTonemap(float3 texColor)
 {
     float ExposureBias = 2.0;
-    float lum = 0.2126 * texColor.r + 0.7152 * texColor.g + 0.0722 * texColor.b + 1;
+    float lum = 0.25 * texColor.r + 0.0001 * texColor.g + 0.001 * texColor.b + 1;
     float3 newLum = Uncharted2Tonemap(ExposureBias*lum);
     float lumScale = newLum / lum;
     return texColor*lumScale;
@@ -132,7 +128,7 @@ float3 Uncharted_Tonemap_Main(float4 pos : SV_Position, float2 texcoord : TexCoo
     float ExposureBias = 2.0;
     float3 curr;
     // Do tonemapping on RGB or Luminance
-    curr = Luminance ? LuminanceTonemap(texColor) : Uncharted2Tonemap(ExposureBias*texColor);
+    curr = LuminanceTonemap(texColor);
 
 
 	float3 whiteScale = 1.0f/Uncharted2Tonemap(WhitePoint);
